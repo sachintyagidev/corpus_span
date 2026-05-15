@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>SWP Strategy Calculator — Historical Bootstrap</title>
+<title>SWP Strategy Calculator — Historical Bootstrap + Family Goals</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   * { box-sizing: border-box; }
@@ -24,6 +24,8 @@
   .btn-primary { background: #2563eb; color: white; }
   .btn-primary:hover { background: #1d4ed8; }
   .btn-secondary { background: #e5e7eb; color: #111827; }
+  .btn-small { padding: 6px 12px; font-size: 12px; }
+  .btn-danger { background: #fee2e2; color: #b91c1c; }
   .btn-row { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th { background: #1f2937; color: white; padding: 9px 7px; text-align: right; font-size: 11px; font-weight: 600; }
@@ -31,6 +33,9 @@
   td { padding: 8px 7px; text-align: right; border-bottom: 1px solid #e5e7eb; }
   td:first-child { text-align: left; font-weight: 500; }
   tr.highlight { background: #fef3c7; font-weight: 600; }
+  tr.goal-year { background: #fef3c7; }
+  tr.goal-year td { font-weight: 600; }
+  tr.depleted td { background: #fee2e2; color: #991b1b; }
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
   .stat { background: #f9fafb; padding: 12px; border-radius: 8px; border-left: 3px solid #2563eb; }
   .stat.gold { border-left-color: #f59e0b; background: #fffbeb; }
@@ -43,110 +48,169 @@
   .insight { background: #eff6ff; border-left: 4px solid #2563eb; padding: 12px 14px; border-radius: 4px; font-size: 13px; margin: 10px 0; }
   .insight.green { background: #d1fae5; border-left-color: #10b981; }
   .insight.amber { background: #fef3c7; border-left-color: #f59e0b; }
+  .insight.red { background: #fee2e2; border-left-color: #ef4444; }
   .loader { display: inline-block; width: 14px; height: 14px; border: 2px solid #d1d5db; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .hide { display: none; }
   .badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 10px; background: #dbeafe; color: #1e40af; margin-left: 4px; }
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .child-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; margin-bottom: 10px; background: #fafafa; }
+  .child-card h4 { margin: 0 0 10px; font-size: 13px; color: #1f2937; display: flex; justify-content: space-between; align-items: center; }
+  .child-name-row { margin-bottom: 10px; }
+  .child-name-row label { display: block; font-size: 11px; color: #4b5563; margin-bottom: 4px; font-weight: 500; }
+  .child-name-row input { width: 100%; padding: 6px 10px; font-size: 13px; border: 1px solid #d1d5db; border-radius: 6px; }
+  .goal-row { display: grid; grid-template-columns: 90px 1fr 1fr; gap: 8px; align-items: end; margin-bottom: 8px; }
+  .goal-row .goal-tag-cell { font-size: 12px; font-weight: 600; color: #374151; padding-bottom: 8px; }
+  .goal-row .field { display: flex; flex-direction: column; }
+  .goal-row .field label { font-size: 11px; color: #4b5563; margin-bottom: 4px; font-weight: 500; line-height: 1.2; min-height: 14px; }
+  .goal-row .field input { width: 100%; padding: 6px 8px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 6px; }
+  @media (max-width: 540px) { .goal-row { grid-template-columns: 1fr 1fr; } .goal-row .goal-tag-cell { grid-column: 1 / -1; padding-bottom: 0; } }
+  .feasibility-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .goal-tag { display: inline-block; padding: 3px 8px; border-radius: 8px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .goal-tag.green { background: #d1fae5; color: #065f46; }
+  .goal-tag.amber { background: #fef3c7; color: #92400e; }
+  .goal-tag.red { background: #fee2e2; color: #991b1b; }
+  .cashflow-wrap { max-height: 480px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; }
+  .cashflow-wrap table { font-size: 12px; }
+  .cashflow-wrap th { position: sticky; top: 0; z-index: 5; }
+  .advanced-toggle { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; font-weight: 500; padding: 10px 0 4px; margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; }
+  .advanced-toggle:hover { text-decoration: underline; }
+  .advanced-toggle .chev { display: inline-block; transition: transform 0.2s; font-size: 10px; }
+  .advanced-toggle.open .chev { transform: rotate(180deg); }
+  .advanced-panel { margin-top: 4px; padding: 14px; background: #f9fafb; border-radius: 10px; border: 1px dashed #d1d5db; }
+  .advanced-panel h3 { margin: 0 0 10px; color: #4b5563; }
+  .basic-hint { font-size: 12px; color: #6b7280; margin-top: 8px; font-style: italic; }
   @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-<h1>SWP Strategy Calculator <span class="badge">Historical Bootstrap + Paired Inflation</span></h1>
-<div class="sub">Uses actual paired (Nifty return, Inflation) data from 1991-2024 to simulate 500 scenarios per run and deliver probabilistic outcomes (P10/P50/P90). Inflation is sampled together with the Nifty return for each year, preserving the real correlation between equity returns and inflation.</div>
+<h1>SWP Strategy Calculator <span class="badge">+ Family Goals (Education / Marriage / Misc)</span></h1>
+<div class="sub">Historical paired (Nifty return, India CPI inflation) bootstrap simulation across 500 scenarios. Add per-child education and marriage goals plus annual miscellaneous expenses. Goals inflate at 7% p.a. from today to the year they're needed; annual misc adds to your SWP withdrawal and grows 7% per year alongside it.</div>
 
 <div class="card">
   <div class="mode-tabs">
-    <button id="modeForward" class="active" onclick="switchMode('forward')">Mode 1 &mdash; How Long Will My Corpus Last?</button>
-    <button id="modeReverse" onclick="switchMode('reverse')">Mode 2 &mdash; Corpus Required for N Years?</button>
+    <button id="modeReverse" class="active" onclick="switchMode('reverse')">Corpus Required for N Years <span class="badge">Default</span></button>
+    <button id="modeForward" onclick="switchMode('forward')">How Long Will My Corpus Last?</button>
   </div>
 
-  <div class="inputs">
+  <div class="inputs" id="basicInputs">
+    <div class="field" id="targetField">
+      <label>Target Duration (Years)</label>
+      <input type="number" id="targetYears" value="30" step="1" min="5" max="60">
+      <div class="hint">How long should the corpus last?</div>
+    </div>
     <div class="field" id="corpusField">
       <label>Initial Corpus (&#8377; Cr)</label>
       <input type="number" id="corpus" value="3" step="0.1" min="0.1">
-      <div class="hint">Mode 1 only.</div>
+      <div class="hint">Only used in &quot;How Long&quot; mode.</div>
     </div>
     <div class="field">
       <label>Monthly Withdrawal (&#8377; Lakh)</label>
       <input type="number" id="withdraw" value="1.5" step="0.1" min="0.1">
+      <div class="hint">Today&apos;s rupees. Grows with inflation.</div>
     </div>
     <div class="field">
-      <label>Inflation Source</label>
-      <select id="inflSource">
-        <option value="paired" selected>Historical Paired (per-year)</option>
-        <option value="fixed">Fixed (use input below)</option>
-      </select>
-      <div class="hint">Paired = each sampled year carries its own CPI.</div>
+      <label>Annual Misc Expense (&#8377; Lakh / yr)</label>
+      <input type="number" id="miscAnnual" value="0" step="0.5" min="0">
+      <div class="hint">Optional. Adds to SWP, grows with inflation.</div>
     </div>
     <div class="field">
-      <label>Inflation % (if Fixed)</label>
+      <label>Inflation % (assumption)</label>
       <input type="number" id="inflation" value="7" step="0.5" min="0">
-      <div class="hint">Used only when source = Fixed.</div>
-    </div>
-    <div class="field">
-      <label>FD Annual Return (%)</label>
-      <input type="number" id="fdReturn" value="6.5" step="0.1" min="0">
-    </div>
-    <div class="field">
-      <label>Strategy</label>
-      <select id="strategy">
-        <option value="5">5-year FD bucket (recommended)</option>
-        <option value="7">7-year FD bucket</option>
-        <option value="8">8-year FD bucket</option>
-        <option value="10">10-year FD bucket</option>
-        <option value="50_50">50/50 split (half rebalance)</option>
-        <option value="all_fd">All FD (100%)</option>
-      </select>
-      <div class="hint">See strategy comparison below.</div>
-    </div>
-    <div class="field">
-      <label>Simulation Method</label>
-      <select id="method">
-        <option value="block">Block Bootstrap (realistic)</option>
-        <option value="iid">I.I.D. Bootstrap (shuffled years)</option>
-        <option value="fixed">Fixed Nifty Return (no variation)</option>
-      </select>
-    </div>
-    <div class="field hide" id="fixedRateField">
-      <label>Fixed Nifty Return (%)</label>
-      <input type="number" id="fixedNifty" value="12" step="0.5">
-    </div>
-    <div class="field" id="targetField">
-      <label>Target Duration (Years)</label>
-      <input type="number" id="targetYears" value="30" step="1" min="5" max="60">
-      <div class="hint">Mode 2 only.</div>
-    </div>
-    <div class="field" id="confidenceField">
-      <label>Confidence Level</label>
-      <select id="confidence">
-        <option value="50">P50 - Median (50% success)</option>
-        <option value="75">P25 - Good case (75% success)</option>
-        <option value="90" selected>P10 - Stress (90% success)</option>
-        <option value="95">P5 - Very conservative (95% success)</option>
-      </select>
-      <div class="hint">Mode 2 only.</div>
-    </div>
-    <div class="field">
-      <label>Scenarios</label>
-      <select id="scenarios">
-        <option value="200">200 (fast)</option>
-        <option value="500" selected>500 (balanced)</option>
-        <option value="1000">1000 (precise)</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Also compare all strategies?</label>
-      <select id="compareAll">
-        <option value="no">No (faster)</option>
-        <option value="yes">Yes (show comparison)</option>
-      </select>
+      <div class="hint">Step-up rate for SWP &amp; goals.</div>
     </div>
   </div>
 
-  <div class="btn-row">
+  <button class="advanced-toggle" id="advToggle" onclick="toggleAdvanced()" type="button">
+    <span class="chev">&#9662;</span><span id="advLabel">Show advanced settings</span>
+  </button>
+
+  <div class="advanced-panel hide" id="advancedPanel">
+    <h3>Advanced Settings</h3>
+    <div class="inputs">
+      <div class="field">
+        <label>Inflation Source</label>
+        <select id="inflSource">
+          <option value="paired" selected>Historical Paired (per-year, realistic)</option>
+          <option value="fixed">Fixed (use Inflation % above)</option>
+        </select>
+        <div class="hint">Paired uses real Nifty + CPI pairs from 1991-2024.</div>
+      </div>
+      <div class="field">
+        <label>Goal Inflation % (education / marriage)</label>
+        <input type="number" id="goalInfl" value="7" step="0.5" min="0">
+        <div class="hint">Applied to family goal targets.</div>
+      </div>
+      <div class="field">
+        <label>FD Annual Return (%)</label>
+        <input type="number" id="fdReturn" value="6.5" step="0.1" min="0">
+      </div>
+      <div class="field">
+        <label>Strategy</label>
+        <select id="strategy">
+          <option value="5">5-year FD bucket (recommended)</option>
+          <option value="7">7-year FD bucket</option>
+          <option value="8">8-year FD bucket</option>
+          <option value="10">10-year FD bucket</option>
+          <option value="50_50">50/50 split (half rebalance)</option>
+          <option value="all_fd">All FD (100%)</option>
+        </select>
+        <div class="hint">See strategy comparison below.</div>
+      </div>
+      <div class="field">
+        <label>Simulation Method</label>
+        <select id="method">
+          <option value="block">Block Bootstrap (realistic)</option>
+          <option value="iid">I.I.D. Bootstrap (shuffled years)</option>
+          <option value="fixed">Fixed Nifty Return (no variation)</option>
+        </select>
+      </div>
+      <div class="field hide" id="fixedRateField">
+        <label>Fixed Nifty Return (%)</label>
+        <input type="number" id="fixedNifty" value="12" step="0.5">
+      </div>
+      <div class="field" id="confidenceField">
+        <label>Confidence Level</label>
+        <select id="confidence">
+          <option value="50">P50 - Median (50% success)</option>
+          <option value="75">P25 - Good case (75% success)</option>
+          <option value="90" selected>P10 - Stress (90% success)</option>
+          <option value="95">P5 - Very conservative (95% success)</option>
+        </select>
+        <div class="hint">Used in &quot;Corpus Required&quot; mode.</div>
+      </div>
+      <div class="field">
+        <label>Scenarios</label>
+        <select id="scenarios">
+          <option value="200">200 (fast)</option>
+          <option value="500" selected>500 (balanced)</option>
+          <option value="1000">1000 (precise)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Also compare all strategies?</label>
+        <select id="compareAll">
+          <option value="no">No (faster)</option>
+          <option value="yes">Yes (show comparison)</option>
+        </select>
+      </div>
+    </div>
+    <div class="basic-hint">All advanced settings have sensible defaults. Most users only need the basic inputs above.</div>
+  </div>
+
+  <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid #e5e7eb;">
+    <h2 style="font-size:16px; margin: 0 0 4px;">Family Goals — Children (Education + Marriage)</h2>
+    <div class="sub" style="margin-bottom: 10px;">Add one entry per child. Amounts are in today's rupees; the simulator will inflate them at your Goal Inflation % to the target year and withdraw a lumpsum from the corpus that year (FD bucket first, then Nifty bucket). Optional — leave empty if not applicable.</div>
+    <div id="childrenList"></div>
+    <div class="btn-row" style="margin-top: 8px;">
+      <button class="btn btn-secondary btn-small" onclick="addChild()">+ Add Child</button>
+      <button class="btn btn-secondary btn-small" onclick="clearChildren()">Clear All</button>
+    </div>
+  </div>
+
+  <div class="btn-row" style="margin-top: 18px; padding-top: 14px; border-top: 1px solid #e5e7eb;">
     <button class="btn btn-primary" id="runBtn" onclick="run()">Calculate</button>
     <button class="btn btn-secondary" onclick="resetDefaults()">Reset Defaults</button>
     <span id="status" style="align-self: center; color:#6b7280; font-size:12px"></span>
@@ -158,7 +222,12 @@
   <div id="banner" class="insight"></div>
   <div id="statGrid" class="stat-grid"></div>
 
-  <div class="grid-2">
+  <div id="feasibilityCard" class="hide">
+    <h3>Goal Funding Feasibility (median scenario)</h3>
+    <div id="feasibilityGrid" class="feasibility-grid"></div>
+  </div>
+
+  <div class="grid-2" style="margin-top:14px">
     <div>
       <h3>Corpus Life Distribution (this strategy)</h3>
       <div class="chart-wrap"><canvas id="histChart"></canvas></div>
@@ -170,7 +239,27 @@
   </div>
 
   <h3 style="margin-top:14px">Median Trajectory Sample</h3>
-  <div class="chart-wrap"><canvas id="trajChart"></canvas></div>
+  <div class="chart-wrap" id="trajChartWrap" style="height: 280px;"><canvas id="trajChart"></canvas></div>
+
+  <h3 style="margin-top:12px">Year-by-Year Cashflow (median scenario)</h3>
+  <div class="sub">Highlighted rows are goal years. Goal column shows the inflation-adjusted lumpsum withdrawn that year.</div>
+  <div class="cashflow-wrap">
+    <table id="cashflowTable">
+      <thead>
+        <tr>
+          <th>Year</th>
+          <th>Opening Corpus</th>
+          <th>Nifty Return %</th>
+          <th>Inflation %</th>
+          <th>SWP + Misc (₹L)</th>
+          <th>Goal Outflow (₹L)</th>
+          <th>Goal Detail</th>
+          <th>Closing Corpus</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
 </div>
 
 <div id="compareCard" class="card hide">
@@ -207,8 +296,6 @@
 
 <script>
 // ========== HISTORICAL PAIRED (Nifty return, India CPI inflation) ==========
-// Each entry: { y: year, nifty: annual return, infl: India CPI inflation for that year }
-// Inflation values sourced from World Bank / RBI CPI-IW series (approx annual).
 const HIST_DATA = [
   { y: 1991, nifty:  0.82, infl: 0.139 },
   { y: 1992, nifty:  0.27, infl: 0.118 },
@@ -259,9 +346,84 @@ const STRATEGY_COLORS = {
   '50_50': '#f59e0b', 'all_fd': '#64748b'
 };
 
+// ========== FAMILY GOALS UI STATE ==========
+// children = [ { name, eduYear, eduAmt (₹L today), marrYear, marrAmt (₹L today) } ]
+let children = [
+  { name: 'Child 1', eduYear: 10, eduAmt: 25, marrYear: 20, marrAmt: 30 }
+];
+
+function renderChildren() {
+  const list = document.getElementById('childrenList');
+  list.innerHTML = '';
+  children.forEach((c, idx) => {
+    const div = document.createElement('div');
+    div.className = 'child-card';
+    div.innerHTML = `
+      <h4>
+        <span>Child ${idx + 1}</span>
+        <button class="btn btn-danger btn-small" onclick="removeChild(${idx})">Remove</button>
+      </h4>
+      <div class="child-name-row">
+        <label>Name / Label</label>
+        <input type="text" value="${c.name}" oninput="updateChild(${idx}, 'name', this.value)">
+      </div>
+      <div class="goal-row">
+        <div class="goal-tag-cell">Education</div>
+        <div class="field">
+          <label>In (years from now)</label>
+          <input type="number" min="0" step="1" value="${c.eduYear}" oninput="updateChild(${idx}, 'eduYear', parseFloat(this.value))">
+        </div>
+        <div class="field">
+          <label>Cost (₹ Lakh, today)</label>
+          <input type="number" min="0" step="1" value="${c.eduAmt}" oninput="updateChild(${idx}, 'eduAmt', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="goal-row">
+        <div class="goal-tag-cell">Marriage</div>
+        <div class="field">
+          <label>In (years from now)</label>
+          <input type="number" min="0" step="1" value="${c.marrYear}" oninput="updateChild(${idx}, 'marrYear', parseFloat(this.value))">
+        </div>
+        <div class="field">
+          <label>Cost (₹ Lakh, today)</label>
+          <input type="number" min="0" step="1" value="${c.marrAmt}" oninput="updateChild(${idx}, 'marrAmt', parseFloat(this.value))">
+        </div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+function addChild() {
+  children.push({ name: `Child ${children.length + 1}`, eduYear: 10, eduAmt: 25, marrYear: 22, marrAmt: 30 });
+  renderChildren();
+}
+function removeChild(idx) {
+  children.splice(idx, 1);
+  renderChildren();
+}
+function clearChildren() {
+  children = [];
+  renderChildren();
+}
+function updateChild(idx, field, value) {
+  children[idx][field] = value;
+}
+
+// Build a flat list of goals from the children state with absolute year and today's amount.
+function buildGoals() {
+  const goals = [];
+  children.forEach((c, i) => {
+    if (c.eduAmt > 0 && c.eduYear >= 0) {
+      goals.push({ label: `${c.name || 'Child '+(i+1)} — Education`, year: Math.round(c.eduYear), amountTodayL: c.eduAmt, child: i });
+    }
+    if (c.marrAmt > 0 && c.marrYear >= 0) {
+      goals.push({ label: `${c.name || 'Child '+(i+1)} — Marriage`, year: Math.round(c.marrYear), amountTodayL: c.marrAmt, child: i });
+    }
+  });
+  return goals;
+}
+
 // ========== RETURN GENERATORS ==========
-// All generators return an array of paired objects: { nifty, infl }.
-// When user chooses "fixed" inflation, the simulate() step overrides .infl with the fixed value.
 function blockBootstrap(years, blockSize = 10) {
   const seq = [];
   while (seq.length < years) {
@@ -277,63 +439,149 @@ function iidBootstrap(years) {
   });
 }
 function fixedReturns(years, rate, inflRate) {
-  // rate is nifty return; inflRate is inflation fallback (may be overridden downstream)
   return Array.from({length: years}, () => ({ nifty: rate, infl: inflRate }));
 }
 
 // ========== SIMULATION ==========
-// annualReturns is an array of { nifty, infl } paired objects.
-// inflationMode: 'paired' → use each year's historical infl; 'fixed' → use fixedInfl for every year.
-function simulate(strategy, annualReturns, corpus, monthlyW, fdRate, inflationMode, fixedInfl, maxYears = 60) {
+// goals: [{ year (0-indexed: 0 = end of year 1), amountTodayL, label }]
+// goalInfl: annual inflation rate applied to goal amounts (e.g. 0.07)
+// miscAnnualL: annual misc expense in today's rupees (₹ Lakh). Grows by paired/fixed inflation each year.
+// monthlyW: monthly SWP in rupees (today's). Steps up by inflation each year alongside misc.
+function simulate(strategy, annualReturns, corpus, monthlyW, fdRate, inflationMode, fixedInfl, goals, goalInfl, miscAnnualL, maxYears = 60) {
   let FD, Nifty, nYears;
   if (strategy === '50_50') { FD = corpus/2; Nifty = corpus/2; nYears = null; }
   else if (strategy === 'all_fd') { FD = corpus; Nifty = 0; nYears = null; }
   else { nYears = parseInt(strategy); const need = nYears * 12 * monthlyW; FD = Math.min(corpus, need); Nifty = corpus - FD; }
 
   let W = monthlyW; const fdM = fdRate / 12; let month = 0;
-  const trajectory = [{ m: 0, total: corpus, fd: FD, nifty: Nifty }];
+  let miscMonthly = (miscAnnualL * 1e5) / 12; // today's rupees, grows each year
+  // Track goal funding per goal entry
+  const goalResults = goals.map(g => ({
+    label: g.label, yearTarget: g.year + 1, // year in human terms (1-indexed)
+    amountTodayL: g.amountTodayL,
+    inflatedAmount: g.amountTodayL * 1e5 * Math.pow(1 + goalInfl, g.year + 1),
+    actuallyWithdrawn: 0,
+    fullyFunded: false,
+    partiallyFunded: false,
+    unfunded: false
+  }));
+
+  // Trajectory now stored per-year, with year-end snapshot + goal info
+  const trajectory = [{ m: 0, year: 0, total: corpus, fd: FD, nifty: Nifty, swpWithdrawn: 0, goalOutflow: 0, goalDetail: '', niftyRet: 0, infl: 0 }];
 
   for (let y = 0; y < maxYears; y++) {
     const pair = y < annualReturns.length ? annualReturns[y] : annualReturns[annualReturns.length-1];
     const rY = pair.nifty;
     const infY = (inflationMode === 'fixed') ? fixedInfl : pair.infl;
     const niftyM = Math.pow(1 + rY, 1/12) - 1;
+
+    const effectiveMonthly = W + miscMonthly; // total monthly outflow incl. misc
+    let yearSwpWithdrawn = 0;
+    let depleted = false;
+
     for (let m = 0; m < 12; m++) {
       month++;
       FD *= (1 + fdM);
       Nifty *= (1 + niftyM);
-      if (FD >= W) {
-        FD -= W;
+      const need = effectiveMonthly;
+      if (FD >= need) {
+        FD -= need;
       } else {
         const total = FD + Nifty;
-        if (total < W) { trajectory.push({ m: month, total: 0, fd: 0, nifty: 0 }); return { months: month, trajectory }; }
-        if (strategy === 'all_fd') { trajectory.push({ m: month, total: 0, fd: 0, nifty: 0 }); return { months: month, trajectory }; }
+        if (total < need) {
+          yearSwpWithdrawn += total;
+          FD = 0; Nifty = 0;
+          trajectory.push({ m: month, year: y+1, total: 0, fd: 0, nifty: 0, swpWithdrawn: yearSwpWithdrawn, goalOutflow: 0, goalDetail: '(corpus depleted)', niftyRet: rY, infl: infY });
+          // Mark remaining goals as unfunded
+          goals.forEach((g, gi) => {
+            if (g.year + 1 > y + 1 || (g.year + 1 === y + 1 && goalResults[gi].actuallyWithdrawn === 0)) {
+              if (goalResults[gi].actuallyWithdrawn === 0) goalResults[gi].unfunded = true;
+            }
+          });
+          return { months: month, trajectory, goalResults };
+        }
+        if (strategy === 'all_fd') {
+          FD = 0; Nifty = 0;
+          yearSwpWithdrawn += need;
+          trajectory.push({ m: month, year: y+1, total: 0, fd: 0, nifty: 0, swpWithdrawn: yearSwpWithdrawn, goalOutflow: 0, goalDetail: '(FD depleted)', niftyRet: rY, infl: infY });
+          return { months: month, trajectory, goalResults };
+        }
         let move = (nYears === null) ? Nifty/2 : Math.min(Nifty, nYears*12*W);
         FD += move; Nifty -= move;
-        if (FD >= W) FD -= W;
-        else { const def = W - FD; FD = 0; Nifty -= def; }
+        if (FD >= need) FD -= need;
+        else { const def = need - FD; FD = 0; Nifty -= def; }
       }
-      if (FD + Nifty < 0.01) { trajectory.push({ m: month, total: 0, fd: 0, nifty: 0 }); return { months: month, trajectory }; }
+      yearSwpWithdrawn += need;
+      if (FD + Nifty < 0.01) {
+        trajectory.push({ m: month, year: y+1, total: 0, fd: 0, nifty: 0, swpWithdrawn: yearSwpWithdrawn, goalOutflow: 0, goalDetail: '(corpus depleted)', niftyRet: rY, infl: infY });
+        return { months: month, trajectory, goalResults };
+      }
     }
-    trajectory.push({ m: month, total: FD + Nifty, fd: FD, nifty: Nifty });
+
+    // Apply any goals that fall in this completed year (year y+1, 1-indexed)
+    let goalOutflowThisYear = 0;
+    const goalDetailsThisYear = [];
+    goals.forEach((g, gi) => {
+      if (g.year + 1 === y + 1) {
+        const target = goalResults[gi].inflatedAmount;
+        const available = FD + Nifty;
+        const take = Math.min(target, available);
+        // Pull from FD first, then Nifty
+        if (FD >= take) {
+          FD -= take;
+        } else {
+          const rem = take - FD;
+          FD = 0;
+          Nifty -= rem;
+        }
+        goalResults[gi].actuallyWithdrawn = take;
+        if (take >= target - 1) { goalResults[gi].fullyFunded = true; }
+        else if (take > 0) { goalResults[gi].partiallyFunded = true; }
+        else { goalResults[gi].unfunded = true; }
+        goalOutflowThisYear += take;
+        goalDetailsThisYear.push(`${g.label}: ${fmtINR(take)}${take < target ? ` (need ${fmtINR(target)})` : ''}`);
+      }
+    });
+
+    trajectory.push({
+      m: month, year: y+1,
+      total: FD + Nifty, fd: FD, nifty: Nifty,
+      swpWithdrawn: yearSwpWithdrawn,
+      goalOutflow: goalOutflowThisYear,
+      goalDetail: goalDetailsThisYear.join(' | '),
+      niftyRet: rY, infl: infY
+    });
+
+    if (FD + Nifty < 0.01) {
+      return { months: month, trajectory, goalResults };
+    }
+
     W *= (1 + infY);
+    miscMonthly *= (1 + infY);
   }
-  return { months: month, trajectory };
+  // Goals scheduled beyond simulation horizon
+  goals.forEach((g, gi) => {
+    if (goalResults[gi].actuallyWithdrawn === 0 && g.year + 1 > maxYears) {
+      goalResults[gi].unfunded = true;
+    }
+  });
+  return { months: month, trajectory, goalResults };
 }
 
-function runScenarios(strategy, nScen, corpus, monthlyW, fdRate, inflationMode, fixedInfl, method, fixedRate, seedReturns = null) {
-  const results = []; const trajectories = [];
+function runScenarios(strategy, nScen, corpus, monthlyW, fdRate, inflationMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, seedReturns = null) {
+  const results = []; const trajectories = []; const allGoalResults = [];
   for (let i = 0; i < nScen; i++) {
     let returns;
     if (seedReturns) returns = seedReturns[i];
     else if (method === 'block') returns = blockBootstrap(60);
     else if (method === 'iid') returns = iidBootstrap(60);
     else returns = fixedReturns(60, fixedRate, fixedInfl);
-    const r = simulate(strategy, returns, corpus, monthlyW, fdRate, inflationMode, fixedInfl);
+    const r = simulate(strategy, returns, corpus, monthlyW, fdRate, inflationMode, fixedInfl, goals, goalInfl, miscAnnualL);
     results.push(r.months);
-    if (i < 50) trajectories.push(r.trajectory);
+    trajectories.push(r.trajectory); // keep all so median chart always renders
+    allGoalResults.push(r.goalResults);
   }
-  return { results, trajectories };
+  return { results, trajectories, allGoalResults };
 }
 
 function percentile(arr, p) {
@@ -344,14 +592,29 @@ function percentile(arr, p) {
 }
 
 // ========== UI ==========
-let mode = 'forward';
+let mode = 'reverse';
 function switchMode(m) {
   mode = m;
   document.getElementById('modeForward').classList.toggle('active', m === 'forward');
   document.getElementById('modeReverse').classList.toggle('active', m === 'reverse');
-  document.getElementById('corpusField').style.opacity = m === 'forward' ? '1' : '0.5';
-  document.getElementById('targetField').style.opacity = m === 'reverse' ? '1' : '0.5';
-  document.getElementById('confidenceField').style.opacity = m === 'reverse' ? '1' : '0.5';
+  document.getElementById('corpusField').style.opacity = m === 'forward' ? '1' : '0.4';
+  document.getElementById('targetField').style.opacity = m === 'reverse' ? '1' : '0.4';
+  document.getElementById('confidenceField').style.opacity = m === 'reverse' ? '1' : '0.4';
+}
+function toggleAdvanced() {
+  const panel = document.getElementById('advancedPanel');
+  const toggle = document.getElementById('advToggle');
+  const label = document.getElementById('advLabel');
+  const isOpen = !panel.classList.contains('hide');
+  if (isOpen) {
+    panel.classList.add('hide');
+    toggle.classList.remove('open');
+    label.textContent = 'Show advanced settings';
+  } else {
+    panel.classList.remove('hide');
+    toggle.classList.add('open');
+    label.textContent = 'Hide advanced settings';
+  }
 }
 document.getElementById('method').addEventListener('change', e => {
   document.getElementById('fixedRateField').classList.toggle('hide', e.target.value !== 'fixed');
@@ -359,7 +622,9 @@ document.getElementById('method').addEventListener('change', e => {
 function resetDefaults() {
   document.getElementById('corpus').value = 3;
   document.getElementById('withdraw').value = 1.5;
+  document.getElementById('miscAnnual').value = 0;
   document.getElementById('inflation').value = 7;
+  document.getElementById('goalInfl').value = 7;
   document.getElementById('inflSource').value = 'paired';
   document.getElementById('fdReturn').value = 6.5;
   document.getElementById('strategy').value = '5';
@@ -370,6 +635,8 @@ function resetDefaults() {
   document.getElementById('scenarios').value = 500;
   document.getElementById('compareAll').value = 'no';
   document.getElementById('fixedRateField').classList.add('hide');
+  children = []; // Reset Defaults clears all family goals
+  renderChildren();
 }
 
 function fmtINR(n) {
@@ -391,20 +658,20 @@ async function run() {
 
   try {
     const monthlyW = parseFloat(document.getElementById('withdraw').value) * 100000;
-    const inflationMode = document.getElementById('inflSource').value; // 'paired' or 'fixed'
+    const miscAnnualL = parseFloat(document.getElementById('miscAnnual').value) || 0;
+    const inflationMode = document.getElementById('inflSource').value;
     const fixedInfl = parseFloat(document.getElementById('inflation').value) / 100;
+    const goalInfl = parseFloat(document.getElementById('goalInfl').value) / 100;
     const fdRate = parseFloat(document.getElementById('fdReturn').value) / 100;
     const strategy = document.getElementById('strategy').value;
     const method = document.getElementById('method').value;
     const fixedRate = parseFloat(document.getElementById('fixedNifty').value) / 100;
     const nScen = parseInt(document.getElementById('scenarios').value);
     const compareAll = document.getElementById('compareAll').value === 'yes';
+    const goals = buildGoals();
 
-    // If user chose "fixed" return method with "paired" inflation, there's no historical pair to draw from.
-    // In that case, force inflation to the fixed user input.
     const effectiveInflMode = (method === 'fixed') ? 'fixed' : inflationMode;
 
-    // Pre-generate return sequences for consistent comparison across strategies/iterations.
     const sharedReturns = [];
     for (let i = 0; i < nScen; i++) {
       if (method === 'block') sharedReturns.push(blockBootstrap(60));
@@ -415,29 +682,29 @@ async function run() {
     let corpus, primaryResults;
     if (mode === 'forward') {
       corpus = parseFloat(document.getElementById('corpus').value) * 1e7;
-      primaryResults = runScenarios(strategy, nScen, corpus, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, sharedReturns);
+      primaryResults = runScenarios(strategy, nScen, corpus, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, sharedReturns);
     } else {
       const targetYears = parseInt(document.getElementById('targetYears').value);
-      const confidence = parseInt(document.getElementById('confidence').value); // e.g., 90 means P10 life >= target
+      const confidence = parseInt(document.getElementById('confidence').value);
       const targetMonths = targetYears * 12;
       const percentileTarget = 100 - confidence;
-      let lo = 5e6, hi = 5e8;
-      for (let iter = 0; iter < 30; iter++) {
+      let lo = 5e6, hi = 1e9;
+      for (let iter = 0; iter < 32; iter++) {
         const mid = (lo + hi) / 2;
-        const { results } = runScenarios(strategy, nScen, mid, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, sharedReturns);
+        const { results } = runScenarios(strategy, nScen, mid, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, sharedReturns);
         const p = percentile(results, percentileTarget);
         if (p >= targetMonths) hi = mid; else lo = mid;
       }
       corpus = hi;
-      primaryResults = runScenarios(strategy, nScen, corpus, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, sharedReturns);
+      primaryResults = runScenarios(strategy, nScen, corpus, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, sharedReturns);
     }
 
-    renderResults(strategy, corpus, monthlyW, fixedInfl, fdRate, primaryResults, effectiveInflMode);
+    renderResults(strategy, corpus, monthlyW, fixedInfl, fdRate, primaryResults, effectiveInflMode, goals, goalInfl, miscAnnualL);
 
     if (compareAll) {
       const compareResults = {};
       for (const s of Object.keys(STRATEGY_LABELS)) {
-        compareResults[s] = runScenarios(s, nScen, corpus, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, sharedReturns).results;
+        compareResults[s] = runScenarios(s, nScen, corpus, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, sharedReturns).results;
       }
       renderComparison(compareResults);
     } else {
@@ -452,12 +719,14 @@ async function run() {
   document.getElementById('runBtn').disabled = false;
 }
 
-function renderResults(strategy, corpus, monthlyW, inflation, fdRate, res, inflationMode) {
+function renderResults(strategy, corpus, monthlyW, inflation, fdRate, res, inflationMode, goals, goalInfl, miscAnnualL) {
   document.getElementById('resultsCard').classList.remove('hide');
   const arr = res.results.map(m => m/12);
   const inflTag = (inflationMode === 'paired')
     ? '<span class="badge" style="background:#fef3c7;color:#92400e">Paired CPI</span>'
     : `<span class="badge">Fixed ${(inflation*100).toFixed(1)}%</span>`;
+  const goalTag = goals.length > 0
+    ? `<span class="badge" style="background:#dbeafe;color:#1e40af">${goals.length} goals · misc ₹${miscAnnualL}L/yr</span>` : '';
 
   const p10 = percentile(arr, 10), p25 = percentile(arr, 25), p50 = percentile(arr, 50);
   const p75 = percentile(arr, 75), p90 = percentile(arr, 90);
@@ -470,7 +739,7 @@ function renderResults(strategy, corpus, monthlyW, inflation, fdRate, res, infla
   const stratName = STRATEGY_LABELS[strategy];
   if (mode === 'forward') {
     banner.className = 'insight green';
-    banner.innerHTML = `<b>Using ${stratName} with ${fmtINR(corpus)} corpus ${inflTag}:</b><br>
+    banner.innerHTML = `<b>Using ${stratName} with ${fmtINR(corpus)} corpus ${inflTag} ${goalTag}:</b><br>
       Median corpus life is <b>${p50.toFixed(1)} years</b>.
       Worst 10% of cases last ≤ ${p10.toFixed(1)} years; best 10% last ≥ ${p90.toFixed(1)} years.
       Probability of lasting 30+ years: <b>${p30y.toFixed(0)}%</b>.`;
@@ -478,7 +747,7 @@ function renderResults(strategy, corpus, monthlyW, inflation, fdRate, res, infla
     const conf = document.getElementById('confidence').value;
     const targetY = document.getElementById('targetYears').value;
     banner.className = 'insight green';
-    banner.innerHTML = `<b>Required Initial Corpus: ${fmtINR(corpus)} ${inflTag}</b><br>
+    banner.innerHTML = `<b>Required Initial Corpus: ${fmtINR(corpus)} ${inflTag} ${goalTag}</b><br>
       Using ${stratName} for ${targetY} years at ${conf}% success confidence.
       Median corpus life at this size: <b>${p50.toFixed(1)} years</b>. P10 (worst 10%): ${p10.toFixed(1)} years.`;
   }
@@ -503,10 +772,12 @@ function renderResults(strategy, corpus, monthlyW, inflation, fdRate, res, infla
     sg.appendChild(d);
   });
 
+  // ===== Goal feasibility (probability across all scenarios) =====
+  renderFeasibility(res.allGoalResults, goals);
+
   // Charts
   destroyCharts();
 
-  // Histogram
   const bins = [];
   for (let b = 10; b <= 60; b += 2) bins.push(b);
   const hist = new Array(bins.length - 1).fill(0);
@@ -527,7 +798,6 @@ function renderResults(strategy, corpus, monthlyW, inflation, fdRate, res, infla
       plugins: { legend: { display: false } } }
   });
 
-  // Survival curve
   const survYears = [];
   for (let y = 10; y <= 50; y++) survYears.push(y);
   const survProbs = survYears.map(y => arr.filter(v => v >= y).length / arr.length * 100);
@@ -539,19 +809,22 @@ function renderResults(strategy, corpus, monthlyW, inflation, fdRate, res, infla
       scales: { x: { title: { display: true, text: 'Years' } }, y: { title: { display: true, text: 'Probability %' }, beginAtZero: true, max: 100 } } }
   });
 
-  // Trajectory (median-ish path)
+  // Trajectory (median-ish path) — always pick from the full trajectories array
   const sortedIdx = res.results.map((v, i) => ({v, i})).sort((a,b) => a.v - b.v);
   const medianIdx = sortedIdx[Math.floor(sortedIdx.length/2)].i;
-  if (medianIdx < res.trajectories.length) {
-    const traj = res.trajectories[medianIdx];
+  let medianTraj = null;
+  const wrap = document.getElementById('trajChartWrap');
+  if (res.trajectories && res.trajectories[medianIdx]) {
+    medianTraj = res.trajectories[medianIdx];
+    if (wrap) wrap.style.display = '';
     trajChart = new Chart(document.getElementById('trajChart'), {
       type: 'line',
       data: {
-        labels: traj.map(p => (p.m/12).toFixed(1)),
+        labels: medianTraj.map(p => (p.m/12).toFixed(1)),
         datasets: [
-          { label: 'FD Bucket (₹L)', data: traj.map(p => p.fd/1e5), borderColor: '#2563eb', backgroundColor: '#2563eb33', fill: true, tension: 0.2, pointRadius: 0 },
-          { label: 'Nifty Bucket (₹L)', data: traj.map(p => p.nifty/1e5), borderColor: '#10b981', backgroundColor: '#10b98133', fill: true, tension: 0.2, pointRadius: 0 },
-          { label: 'Total Corpus (₹L)', data: traj.map(p => p.total/1e5), borderColor: '#6b7280', borderDash: [4,4], fill: false, tension: 0.2, pointRadius: 0 }
+          { label: 'FD Bucket (₹L)', data: medianTraj.map(p => p.fd/1e5), borderColor: '#2563eb', backgroundColor: '#2563eb33', fill: true, tension: 0.2, pointRadius: 0 },
+          { label: 'Nifty Bucket (₹L)', data: medianTraj.map(p => p.nifty/1e5), borderColor: '#10b981', backgroundColor: '#10b98133', fill: true, tension: 0.2, pointRadius: 0 },
+          { label: 'Total Corpus (₹L)', data: medianTraj.map(p => p.total/1e5), borderColor: '#6b7280', borderDash: [4,4], fill: false, tension: 0.2, pointRadius: 0 }
         ]
       },
       options: { responsive: true, maintainAspectRatio: false,
@@ -559,6 +832,79 @@ function renderResults(strategy, corpus, monthlyW, inflation, fdRate, res, infla
         plugins: { legend: { position: 'top' } },
         interaction: { intersect: false, mode: 'index' } }
     });
+  } else if (res.trajectories.length > 0) {
+    medianTraj = res.trajectories[0];
+    if (wrap) wrap.style.display = 'none';
+  } else {
+    if (wrap) wrap.style.display = 'none';
+  }
+  // Cashflow table from median trajectory
+  renderCashflow(medianTraj);
+}
+
+function renderFeasibility(allGoalResults, goals) {
+  const card = document.getElementById('feasibilityCard');
+  const grid = document.getElementById('feasibilityGrid');
+  if (!goals.length) { card.classList.add('hide'); return; }
+  card.classList.remove('hide');
+  grid.innerHTML = '';
+  goals.forEach((g, gi) => {
+    let full = 0, part = 0, none = 0;
+    const totalScen = allGoalResults.length;
+    let avgInflated = 0;
+    allGoalResults.forEach(scenarioGoals => {
+      const r = scenarioGoals[gi];
+      if (!r) return;
+      avgInflated = r.inflatedAmount;
+      if (r.fullyFunded) full++;
+      else if (r.partiallyFunded) part++;
+      else none++;
+    });
+    const fullPct = (full/totalScen*100);
+    const partPct = (part/totalScen*100);
+    const nonePct = (none/totalScen*100);
+    let cls = 'green', tag = 'Fully fundable';
+    if (fullPct < 50) { cls = 'red'; tag = 'High risk'; }
+    else if (fullPct < 85) { cls = 'amber'; tag = 'At risk'; }
+    const d = document.createElement('div');
+    d.className = 'stat ' + cls;
+    d.innerHTML = `
+      <div class="stat-label">${g.label}</div>
+      <div style="font-size:13px; margin-top:4px; font-weight:600">Year ${g.year + 1} · ${fmtINR(avgInflated)}</div>
+      <div class="stat-sub">Today: ₹${g.amountTodayL}L → grows at goal-infl rate</div>
+      <div style="margin-top:6px">
+        <span class="goal-tag green">✓ ${fullPct.toFixed(0)}%</span>
+        <span class="goal-tag amber">~ ${partPct.toFixed(0)}%</span>
+        <span class="goal-tag red">✗ ${nonePct.toFixed(0)}%</span>
+      </div>
+      <div class="stat-sub" style="margin-top:4px"><b>${tag}</b></div>
+    `;
+    grid.appendChild(d);
+  });
+}
+
+function renderCashflow(traj) {
+  const tbody = document.querySelector('#cashflowTable tbody');
+  tbody.innerHTML = '';
+  if (!traj || traj.length < 2) return;
+  // Skip the initial m=0 entry; show one row per completed year
+  for (let i = 1; i < traj.length; i++) {
+    const prev = traj[i-1];
+    const cur = traj[i];
+    const tr = document.createElement('tr');
+    if (cur.goalOutflow > 0) tr.className = 'goal-year';
+    if (cur.total < 0.01) tr.className = (tr.className || '') + ' depleted';
+    tr.innerHTML = `
+      <td>${cur.year}</td>
+      <td>${fmtINR(prev.total)}</td>
+      <td>${(cur.niftyRet*100).toFixed(1)}%</td>
+      <td>${(cur.infl*100).toFixed(1)}%</td>
+      <td>${(cur.swpWithdrawn/1e5).toFixed(2)}</td>
+      <td>${cur.goalOutflow > 0 ? (cur.goalOutflow/1e5).toFixed(2) : '—'}</td>
+      <td style="text-align:left; font-size:11px">${cur.goalDetail || ''}</td>
+      <td>${fmtINR(cur.total)}</td>
+    `;
+    tbody.appendChild(tr);
   }
 }
 
@@ -593,7 +939,11 @@ function renderComparison(allResults) {
 }
 
 // Auto-run on load
-window.addEventListener('DOMContentLoaded', () => setTimeout(run, 200));
+window.addEventListener('DOMContentLoaded', () => {
+  switchMode('reverse'); // default to "Corpus Required" mode
+  renderChildren();
+  setTimeout(run, 250);
+});
 </script>
 </body>
 </html>
