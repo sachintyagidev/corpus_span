@@ -36,6 +36,7 @@
   tr.goal-year { background: #fef3c7; }
   tr.goal-year td { font-weight: 600; }
   tr.depleted td { background: #fee2e2; color: #991b1b; }
+  tr.pre-retire td { background: #f9fafb; color: #9ca3af; font-style: italic; }
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
   .stat { background: #f9fafb; padding: 12px; border-radius: 8px; border-left: 3px solid #2563eb; }
   .stat.gold { border-left-color: #f59e0b; background: #fffbeb; }
@@ -99,12 +100,17 @@
     <div class="field" id="targetField">
       <label>Target Duration (Years)</label>
       <input type="number" id="targetYears" value="30" step="1" min="5" max="60">
-      <div class="hint">How long should the corpus last?</div>
+      <div class="hint">How long should retirement last?</div>
+    </div>
+    <div class="field">
+      <label>Years until Retirement</label>
+      <input type="number" id="retireStart" value="0" step="1" min="0" max="40">
+      <div class="hint">0 = retire today. Inflates SWP to that year.</div>
     </div>
     <div class="field" id="corpusField">
       <label>Initial Corpus (&#8377; Cr)</label>
       <input type="number" id="corpus" value="3" step="0.1" min="0.1">
-      <div class="hint">Only used in &quot;How Long&quot; mode.</div>
+      <div class="hint">Value at retirement start (nominal).</div>
     </div>
     <div class="field">
       <label>Monthly Withdrawal (&#8377; Lakh)</label>
@@ -447,17 +453,23 @@ function fixedReturns(years, rate, inflRate) {
 // goalInfl: annual inflation rate applied to goal amounts (e.g. 0.07)
 // miscAnnualL: annual misc expense in today's rupees (₹ Lakh). Grows by paired/fixed inflation each year.
 // monthlyW: monthly SWP in rupees (today's). Steps up by inflation each year alongside misc.
-function simulate(strategy, annualReturns, corpus, monthlyW, fdRate, inflationMode, fixedInfl, goals, goalInfl, miscAnnualL, maxYears = 60) {
+function simulate(strategy, annualReturns, corpus, monthlyW, fdRate, inflationMode, fixedInfl, goals, goalInfl, miscAnnualL, retireStart) {
+  const maxYears = retireStart + 60; // up to 60 retirement years after pre-retirement gap
+  // Pre-inflate SWP and misc to retirement-start values using the user's fixed inflation assumption
+  // (paired CPI is only available for simulated retirement years).
+  const preInfl = fixedInfl;
+  let W = monthlyW * Math.pow(1 + preInfl, retireStart);
+  let miscMonthly = ((miscAnnualL * 1e5) / 12) * Math.pow(1 + preInfl, retireStart);
+
   let FD, Nifty, nYears;
   if (strategy === '50_50') { FD = corpus/2; Nifty = corpus/2; nYears = null; }
   else if (strategy === 'all_fd') { FD = corpus; Nifty = 0; nYears = null; }
-  else { nYears = parseInt(strategy); const need = nYears * 12 * monthlyW; FD = Math.min(corpus, need); Nifty = corpus - FD; }
+  else { nYears = parseInt(strategy); const need = nYears * 12 * W; FD = Math.min(corpus, need); Nifty = corpus - FD; }
 
-  let W = monthlyW; const fdM = fdRate / 12; let month = 0;
-  let miscMonthly = (miscAnnualL * 1e5) / 12; // today's rupees, grows each year
-  // Track goal funding per goal entry
+  const fdM = fdRate / 12; let month = 0;
+  // Track goal funding per goal entry. Goal years are calendar years from today.
   const goalResults = goals.map(g => ({
-    label: g.label, yearTarget: g.year + 1, // year in human terms (1-indexed)
+    label: g.label, yearTarget: g.year + 1,
     amountTodayL: g.amountTodayL,
     inflatedAmount: g.amountTodayL * 1e5 * Math.pow(1 + goalInfl, g.year + 1),
     actuallyWithdrawn: 0,
@@ -466,11 +478,22 @@ function simulate(strategy, annualReturns, corpus, monthlyW, fdRate, inflationMo
     unfunded: false
   }));
 
-  // Trajectory now stored per-year, with year-end snapshot + goal info
-  const trajectory = [{ m: 0, year: 0, total: corpus, fd: FD, nifty: Nifty, swpWithdrawn: 0, goalOutflow: 0, goalDetail: '', niftyRet: 0, infl: 0 }];
+  const trajectory = [{ m: 0, year: 0, total: corpus, fd: FD, nifty: Nifty, swpWithdrawn: 0, goalOutflow: 0, goalDetail: retireStart > 0 ? 'Today (pre-retirement)' : 'Today (retirement starts year 1)', niftyRet: 0, infl: 0, isPreRetire: retireStart > 0 }];
 
-  for (let y = 0; y < maxYears; y++) {
-    const pair = y < annualReturns.length ? annualReturns[y] : annualReturns[annualReturns.length-1];
+  // Pre-retirement years: corpus held at entered nominal value (no calculation, no withdrawals, no goals).
+  for (let y = 0; y < retireStart; y++) {
+    month += 12;
+    trajectory.push({
+      m: month, year: y+1, total: FD + Nifty, fd: FD, nifty: Nifty,
+      swpWithdrawn: 0, goalOutflow: 0, goalDetail: '(pre-retirement · no activity)',
+      niftyRet: 0, infl: 0, isPreRetire: true
+    });
+  }
+
+  // Retirement simulation begins at calendar year retireStart+1
+  for (let y = retireStart; y < maxYears; y++) {
+    const ry = y - retireStart; // 0-indexed retirement year (for annualReturns lookup)
+    const pair = ry < annualReturns.length ? annualReturns[ry] : annualReturns[annualReturns.length-1];
     const rY = pair.nifty;
     const infY = (inflationMode === 'fixed') ? fixedInfl : pair.infl;
     const niftyM = Math.pow(1 + rY, 1/12) - 1;
@@ -491,7 +514,7 @@ function simulate(strategy, annualReturns, corpus, monthlyW, fdRate, inflationMo
         if (total < need) {
           yearSwpWithdrawn += total;
           FD = 0; Nifty = 0;
-          trajectory.push({ m: month, year: y+1, total: 0, fd: 0, nifty: 0, swpWithdrawn: yearSwpWithdrawn, goalOutflow: 0, goalDetail: '(corpus depleted)', niftyRet: rY, infl: infY });
+          trajectory.push({ m: month, year: y+1, total: 0, fd: 0, nifty: 0, swpWithdrawn: yearSwpWithdrawn, goalOutflow: 0, goalDetail: '(corpus depleted)', niftyRet: rY, infl: infY, isPreRetire: false });
           // Mark remaining goals as unfunded
           goals.forEach((g, gi) => {
             if (g.year + 1 > y + 1 || (g.year + 1 === y + 1 && goalResults[gi].actuallyWithdrawn === 0)) {
@@ -503,7 +526,7 @@ function simulate(strategy, annualReturns, corpus, monthlyW, fdRate, inflationMo
         if (strategy === 'all_fd') {
           FD = 0; Nifty = 0;
           yearSwpWithdrawn += need;
-          trajectory.push({ m: month, year: y+1, total: 0, fd: 0, nifty: 0, swpWithdrawn: yearSwpWithdrawn, goalOutflow: 0, goalDetail: '(FD depleted)', niftyRet: rY, infl: infY });
+          trajectory.push({ m: month, year: y+1, total: 0, fd: 0, nifty: 0, swpWithdrawn: yearSwpWithdrawn, goalOutflow: 0, goalDetail: '(FD depleted)', niftyRet: rY, infl: infY, isPreRetire: false });
           return { months: month, trajectory, goalResults };
         }
         let move = (nYears === null) ? Nifty/2 : Math.min(Nifty, nYears*12*W);
@@ -513,7 +536,7 @@ function simulate(strategy, annualReturns, corpus, monthlyW, fdRate, inflationMo
       }
       yearSwpWithdrawn += need;
       if (FD + Nifty < 0.01) {
-        trajectory.push({ m: month, year: y+1, total: 0, fd: 0, nifty: 0, swpWithdrawn: yearSwpWithdrawn, goalOutflow: 0, goalDetail: '(corpus depleted)', niftyRet: rY, infl: infY });
+        trajectory.push({ m: month, year: y+1, total: 0, fd: 0, nifty: 0, swpWithdrawn: yearSwpWithdrawn, goalOutflow: 0, goalDetail: '(corpus depleted)', niftyRet: rY, infl: infY, isPreRetire: false });
         return { months: month, trajectory, goalResults };
       }
     }
@@ -549,7 +572,7 @@ function simulate(strategy, annualReturns, corpus, monthlyW, fdRate, inflationMo
       swpWithdrawn: yearSwpWithdrawn,
       goalOutflow: goalOutflowThisYear,
       goalDetail: goalDetailsThisYear.join(' | '),
-      niftyRet: rY, infl: infY
+      niftyRet: rY, infl: infY, isPreRetire: false
     });
 
     if (FD + Nifty < 0.01) {
@@ -568,7 +591,7 @@ function simulate(strategy, annualReturns, corpus, monthlyW, fdRate, inflationMo
   return { months: month, trajectory, goalResults };
 }
 
-function runScenarios(strategy, nScen, corpus, monthlyW, fdRate, inflationMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, seedReturns = null) {
+function runScenarios(strategy, nScen, corpus, monthlyW, fdRate, inflationMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, retireStart, seedReturns = null) {
   const results = []; const trajectories = []; const allGoalResults = [];
   for (let i = 0; i < nScen; i++) {
     let returns;
@@ -576,9 +599,10 @@ function runScenarios(strategy, nScen, corpus, monthlyW, fdRate, inflationMode, 
     else if (method === 'block') returns = blockBootstrap(60);
     else if (method === 'iid') returns = iidBootstrap(60);
     else returns = fixedReturns(60, fixedRate, fixedInfl);
-    const r = simulate(strategy, returns, corpus, monthlyW, fdRate, inflationMode, fixedInfl, goals, goalInfl, miscAnnualL);
-    results.push(r.months);
-    trajectories.push(r.trajectory); // keep all so median chart always renders
+    const r = simulate(strategy, returns, corpus, monthlyW, fdRate, inflationMode, fixedInfl, goals, goalInfl, miscAnnualL, retireStart);
+    // Report retirement-only months (exclude pre-retirement) for stats & bisection.
+    results.push(Math.max(0, r.months - retireStart * 12));
+    trajectories.push(r.trajectory);
     allGoalResults.push(r.goalResults);
   }
   return { results, trajectories, allGoalResults };
@@ -623,6 +647,7 @@ function resetDefaults() {
   document.getElementById('corpus').value = 3;
   document.getElementById('withdraw').value = 1.5;
   document.getElementById('miscAnnual').value = 0;
+  document.getElementById('retireStart').value = 0;
   document.getElementById('inflation').value = 7;
   document.getElementById('goalInfl').value = 7;
   document.getElementById('inflSource').value = 'paired';
@@ -668,7 +693,18 @@ async function run() {
     const fixedRate = parseFloat(document.getElementById('fixedNifty').value) / 100;
     const nScen = parseInt(document.getElementById('scenarios').value);
     const compareAll = document.getElementById('compareAll').value === 'yes';
+    const retireStart = Math.max(0, parseInt(document.getElementById('retireStart').value) || 0);
     const goals = buildGoals();
+
+    // Validation: no goal can be scheduled before retirement starts.
+    // Goal calendar year = goal.year + 1 (1-indexed). Retirement starts at calendar year retireStart + 1.
+    const earlyGoals = goals.filter(g => (g.year + 1) <= retireStart);
+    if (earlyGoals.length > 0) {
+      const names = earlyGoals.map(g => `${g.label} (yr ${g.year + 1})`).join(', ');
+      status.innerHTML = `<span style="color:#ef4444">✗</span> Goal year must be after retirement starts (year ${retireStart + 1}+): ${names}`;
+      document.getElementById('runBtn').disabled = false;
+      return;
+    }
 
     const effectiveInflMode = (method === 'fixed') ? 'fixed' : inflationMode;
 
@@ -682,7 +718,7 @@ async function run() {
     let corpus, primaryResults;
     if (mode === 'forward') {
       corpus = parseFloat(document.getElementById('corpus').value) * 1e7;
-      primaryResults = runScenarios(strategy, nScen, corpus, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, sharedReturns);
+      primaryResults = runScenarios(strategy, nScen, corpus, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, retireStart, sharedReturns);
     } else {
       const targetYears = parseInt(document.getElementById('targetYears').value);
       const confidence = parseInt(document.getElementById('confidence').value);
@@ -691,20 +727,20 @@ async function run() {
       let lo = 5e6, hi = 1e9;
       for (let iter = 0; iter < 32; iter++) {
         const mid = (lo + hi) / 2;
-        const { results } = runScenarios(strategy, nScen, mid, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, sharedReturns);
+        const { results } = runScenarios(strategy, nScen, mid, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, retireStart, sharedReturns);
         const p = percentile(results, percentileTarget);
         if (p >= targetMonths) hi = mid; else lo = mid;
       }
       corpus = hi;
-      primaryResults = runScenarios(strategy, nScen, corpus, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, sharedReturns);
+      primaryResults = runScenarios(strategy, nScen, corpus, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, retireStart, sharedReturns);
     }
 
-    renderResults(strategy, corpus, monthlyW, fixedInfl, fdRate, primaryResults, effectiveInflMode, goals, goalInfl, miscAnnualL);
+    renderResults(strategy, corpus, monthlyW, fixedInfl, fdRate, primaryResults, effectiveInflMode, goals, goalInfl, miscAnnualL, retireStart);
 
     if (compareAll) {
       const compareResults = {};
       for (const s of Object.keys(STRATEGY_LABELS)) {
-        compareResults[s] = runScenarios(s, nScen, corpus, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, sharedReturns).results;
+        compareResults[s] = runScenarios(s, nScen, corpus, monthlyW, fdRate, effectiveInflMode, fixedInfl, method, fixedRate, goals, goalInfl, miscAnnualL, retireStart, sharedReturns).results;
       }
       renderComparison(compareResults);
     } else {
@@ -719,7 +755,7 @@ async function run() {
   document.getElementById('runBtn').disabled = false;
 }
 
-function renderResults(strategy, corpus, monthlyW, inflation, fdRate, res, inflationMode, goals, goalInfl, miscAnnualL) {
+function renderResults(strategy, corpus, monthlyW, inflation, fdRate, res, inflationMode, goals, goalInfl, miscAnnualL, retireStart) {
   document.getElementById('resultsCard').classList.remove('hide');
   const arr = res.results.map(m => m/12);
   const inflTag = (inflationMode === 'paired')
@@ -727,6 +763,13 @@ function renderResults(strategy, corpus, monthlyW, inflation, fdRate, res, infla
     : `<span class="badge">Fixed ${(inflation*100).toFixed(1)}%</span>`;
   const goalTag = goals.length > 0
     ? `<span class="badge" style="background:#dbeafe;color:#1e40af">${goals.length} goals · misc ₹${miscAnnualL}L/yr</span>` : '';
+  const retireTag = retireStart > 0
+    ? `<span class="badge" style="background:#ede9fe;color:#5b21b6">Retire in ${retireStart} yr${retireStart>1?'s':''}</span>` : '';
+  // Effective SWP at retirement start, after pre-retirement inflation step-up
+  const effectiveWAtRetirement = monthlyW * Math.pow(1 + inflation, retireStart);
+  const retireNote = retireStart > 0
+    ? ` Pre-retirement years (1–${retireStart}) are not simulated; SWP grown to ${fmtINR(effectiveWAtRetirement)}/mo at retirement.`
+    : '';
 
   const p10 = percentile(arr, 10), p25 = percentile(arr, 25), p50 = percentile(arr, 50);
   const p75 = percentile(arr, 75), p90 = percentile(arr, 90);
@@ -739,17 +782,17 @@ function renderResults(strategy, corpus, monthlyW, inflation, fdRate, res, infla
   const stratName = STRATEGY_LABELS[strategy];
   if (mode === 'forward') {
     banner.className = 'insight green';
-    banner.innerHTML = `<b>Using ${stratName} with ${fmtINR(corpus)} corpus ${inflTag} ${goalTag}:</b><br>
-      Median corpus life is <b>${p50.toFixed(1)} years</b>.
+    banner.innerHTML = `<b>Using ${stratName} with ${fmtINR(corpus)} corpus ${inflTag} ${goalTag} ${retireTag}:</b><br>
+      Median retirement life is <b>${p50.toFixed(1)} years</b>.
       Worst 10% of cases last ≤ ${p10.toFixed(1)} years; best 10% last ≥ ${p90.toFixed(1)} years.
-      Probability of lasting 30+ years: <b>${p30y.toFixed(0)}%</b>.`;
+      Probability of lasting 30+ retirement years: <b>${p30y.toFixed(0)}%</b>.${retireNote}`;
   } else {
     const conf = document.getElementById('confidence').value;
     const targetY = document.getElementById('targetYears').value;
     banner.className = 'insight green';
-    banner.innerHTML = `<b>Required Initial Corpus: ${fmtINR(corpus)} ${inflTag} ${goalTag}</b><br>
-      Using ${stratName} for ${targetY} years at ${conf}% success confidence.
-      Median corpus life at this size: <b>${p50.toFixed(1)} years</b>. P10 (worst 10%): ${p10.toFixed(1)} years.`;
+    banner.innerHTML = `<b>Required Corpus at Retirement: ${fmtINR(corpus)} ${inflTag} ${goalTag} ${retireTag}</b><br>
+      Using ${stratName} for ${targetY} retirement years at ${conf}% success confidence.
+      Median retirement life at this size: <b>${p50.toFixed(1)} years</b>. P10 (worst 10%): ${p10.toFixed(1)} years.${retireNote}`;
   }
 
   // Stats
@@ -892,7 +935,8 @@ function renderCashflow(traj) {
     const prev = traj[i-1];
     const cur = traj[i];
     const tr = document.createElement('tr');
-    if (cur.goalOutflow > 0) tr.className = 'goal-year';
+    if (cur.isPreRetire) tr.className = 'pre-retire';
+    else if (cur.goalOutflow > 0) tr.className = 'goal-year';
     if (cur.total < 0.01) tr.className = (tr.className || '') + ' depleted';
     tr.innerHTML = `
       <td>${cur.year}</td>
